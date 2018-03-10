@@ -1,0 +1,6 @@
+[package]
+name = "mtmigrate"
+version = "0.1.0"
+authors = ["Thomas Colliers <mail@thomascolliers.com>"]
+
+[dependencies]
