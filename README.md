@@ -4,8 +4,7 @@ mtmigrate (music torrent migrate) is a tool to help you with migrating your old 
 
 It is primarily target towards FLAC files as these are lossless and 2 rips of the same CD should be binary compatible if the same encoding settings were used.
 
-It is a reimplementation of my original tool [whatmigrate][whatmigratelink] in Rust.
-[whatmigratelink]: https://github.com/ThomasColliers/whatmigrate
+It is a reimplementation of my original tool [whatmigrate](https://github.com/ThomasColliers/whatmigrate) in Rust.
 
 ## Dependencies
 - rustc/cargo
