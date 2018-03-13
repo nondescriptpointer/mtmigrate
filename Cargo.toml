@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Thomas Colliers <mail@thomascolliers.com>"]
 
 [dependencies]
+clap="^2.31.1"
+bip_metainfo="^0.12.0"
+walkdir="2"
