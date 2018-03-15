@@ -4,14 +4,14 @@ use self::bip_metainfo::{Metainfo};
 use self::walkdir::{DirEntry, WalkDir};
 use std::path::{PathBuf};
 use std::collections::{HashSet};
-use std::io;
+mod filemapping;
 
 static AUDIO_FORMATS:&'static[&'static str] = &["flac","mp3","ogg","aac","ac3","dts"];
 
 pub type MigrationError = Box<::std::error::Error>;
 
 #[derive(Debug)]
-struct SourceFile {
+pub struct SourceFile {
     path: PathBuf,
     display: String,
     extension: Option<String>,
@@ -21,7 +21,7 @@ struct SourceFile {
 }
 
 #[derive(Debug)]
-struct TargetFile {
+pub struct TargetFile {
     index: usize,
     path: PathBuf,
     extension: Option<String>,
@@ -34,19 +34,6 @@ fn is_file(entry: &Result<DirEntry, self::walkdir::Error>) -> bool {
     match *entry {
         Ok(ref e) => (*e).file_type().is_file(),
         Err(_) => false
-    }
-}
-
-fn print_mapping(inputs: &Vec<SourceFile>, targets: &Vec<TargetFile>) {
-    // determine the maximume length for padding
-    let max = inputs.iter().map(|e| e.display.len()).max().unwrap();
-    // print all the mappings we found
-    for input in inputs.iter() {
-        if let Some(ref i) = input.mapping {
-            println!("  {:2$} => {}", input.display, targets[*i].path.to_string_lossy(), max+1);
-        } else {
-            println!("  {:1$} => None", input.display, max+1);
-        }
     }
 }
 
@@ -101,73 +88,8 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
     }
 
     // DEFINE MAPPINGS
-
-    // try to exact match non-audio files, these are usually small so not really worth trying something else on these
-    for input in inputs.iter_mut().filter(|f| !f.is_audio) {
-        match targets.iter().position(|target| {
-            if input.size == target.size && input.extension == target.extension {
-                true
-            }else{
-                false
-            }
-        }) {
-            Some(pos) => input.mapping = Some(pos),
-            None => {}
-        }
-    }
-
-    // sort the targets as well to use filename sorting to map
-    {
-        let mut targets_audio:Vec<&TargetFile> = targets.iter().filter(|f| f.is_audio).collect();
-        targets_audio.sort_by(|a, b| a.path.cmp(&b.path));
-        println!("{:?}", targets_audio);
-        for (i, input) in inputs.iter_mut().filter(|f| f.is_audio).enumerate() {
-            if let Some(e) = targets_audio.get(i) {
-                input.mapping = Some(e.index);
-            } else {
-                input.mapping = None
-            }
-        }
-    }
-
-    // for audio files
-    println!("Suggested mapping based on filename sort:");
-    print_mapping(&inputs, &targets);
-    loop {
-        println!("Please input 'c' to continue, 's' to try filesize remap or 'm' to manually adjust the mapping [c]");
-        let mut reply = String::new();
-        io::stdin().read_line(&mut reply)?;
-        match reply.trim() {
-            "" | "c" => {
-                break;
-            },
-            "s" => {
-                // sort the inputs and targets by filesize
-                {
-                    let mut inputs_sorted:Vec<&mut SourceFile> = inputs.iter_mut().filter(|f| f.is_audio).collect();
-                    inputs_sorted.sort_by(|a, b| a.size.cmp(&b.size));
-                    let mut targets_sorted:Vec<&TargetFile> = targets.iter().filter(|f| f.is_audio).collect();
-                    targets_sorted.sort_by(|a, b| a.size.cmp(&b.size));
-                    for (i, input) in inputs_sorted.iter_mut().enumerate() {
-                        if let Some(e) = targets_sorted.get(i) {
-                            input.mapping = Some(e.index);
-                        } else {
-                            input.mapping = None
-                        }
-                    }
-                }
-                println!("Suggested mapping based on filesize sort:");
-                print_mapping(&inputs, &targets);
-            },
-            "m" => {
-                // TODO: interactive remapping
-            },
-            _ => {
-                println!("Unrecognized option.");
-            }
-        }
-    }
-
+    filemapping::create_mapping(&mut inputs, &targets);
+    
     run_matches(torrent_meta, inputs, targets);
 
     Ok(())
