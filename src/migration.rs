@@ -38,7 +38,7 @@ fn is_file(entry: &Result<DirEntry, self::walkdir::Error>) -> bool {
 }
 
 fn print_mapping(inputs: &Vec<SourceFile>, targets: &Vec<TargetFile>) {
-    // determine the maximume length so we can pad this mapping out
+    // determine the maximume length for padding
     let max = inputs.iter().map(|e| e.display.len()).max().unwrap();
     // print all the mappings we found
     for input in inputs.iter() {
@@ -100,7 +100,7 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
         }
     }
 
-    // BUILD MAPPINGS
+    // DEFINE MAPPINGS
 
     // try to exact match non-audio files, these are usually small so not really worth trying something else on these
     for input in inputs.iter_mut().filter(|f| !f.is_audio) {
@@ -116,7 +116,7 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
         }
     }
 
-    // next, we'll want to sort the targets as well, goal is to use normal sorting to determine the mapping
+    // sort the targets as well to use filename sorting to map
     {
         let mut targets_audio:Vec<&TargetFile> = targets.iter().filter(|f| f.is_audio).collect();
         targets_audio.sort_by(|a, b| a.path.cmp(&b.path));
@@ -124,6 +124,8 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
         for (i, input) in inputs.iter_mut().filter(|f| f.is_audio).enumerate() {
             if let Some(e) = targets_audio.get(i) {
                 input.mapping = Some(e.index);
+            } else {
+                input.mapping = None
             }
         }
     }
@@ -134,16 +136,31 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
     loop {
         println!("Please input 'c' to continue, 's' to try filesize remap or 'm' to manually adjust the mapping [c]");
         let mut reply = String::new();
-        io::stdin().read_line(&mut reply);
+        io::stdin().read_line(&mut reply)?;
         match reply.trim() {
             "" | "c" => {
                 break;
             },
             "s" => {
-                // adjust the remapping based on size
+                // sort the inputs and targets by filesize
+                {
+                    let mut inputs_sorted:Vec<&mut SourceFile> = inputs.iter_mut().filter(|f| f.is_audio).collect();
+                    inputs_sorted.sort_by(|a, b| a.size.cmp(&b.size));
+                    let mut targets_sorted:Vec<&TargetFile> = targets.iter().filter(|f| f.is_audio).collect();
+                    targets_sorted.sort_by(|a, b| a.size.cmp(&b.size));
+                    for (i, input) in inputs_sorted.iter_mut().enumerate() {
+                        if let Some(e) = targets_sorted.get(i) {
+                            input.mapping = Some(e.index);
+                        } else {
+                            input.mapping = None
+                        }
+                    }
+                }
+                println!("Suggested mapping based on filesize sort:");
+                print_mapping(&inputs, &targets);
             },
             "m" => {
-                // interactive remapping
+                // TODO: interactive remapping
             },
             _ => {
                 println!("Unrecognized option.");
