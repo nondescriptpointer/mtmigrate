@@ -2,7 +2,7 @@ use ::migration::{SourceFile, TargetFile};
 use std::io;
 use std::io::Write;
 
-pub fn create_mapping(mut inputs: &mut Vec<SourceFile>, targets: &Vec<TargetFile>) {
+pub fn create_mapping(mut inputs: &mut Vec<SourceFile>, targets: &mut Vec<TargetFile>) {
     // try to exact match non-audio files, these are usually small so not really worth trying something else on these
     for input in inputs.iter_mut().filter(|f| !f.is_audio) {
         match targets.iter().position(|target| {
@@ -41,6 +41,13 @@ pub fn create_mapping(mut inputs: &mut Vec<SourceFile>, targets: &Vec<TargetFile
             _ => {
                 println!("Unrecognized option.");
             }
+        }
+    }
+
+    // assign the mapping to the targets as well
+    for (i, input) in inputs.iter().enumerate() {
+        if let Some(mapping) = input.mapping {
+            targets[mapping].mapping = Some(i);
         }
     }
 }

@@ -1,10 +1,13 @@
 extern crate bip_metainfo;
 extern crate walkdir;
+extern crate sha1;
+extern crate rayon;
 use self::bip_metainfo::{Metainfo};
 use self::walkdir::{DirEntry, WalkDir};
 use std::path::{PathBuf};
 use std::collections::{HashSet};
 mod filemapping;
+mod matching;
 
 static AUDIO_FORMATS:&'static[&'static str] = &["flac","mp3","ogg","aac","ac3","dts"];
 
@@ -17,7 +20,7 @@ pub struct SourceFile {
     extension: Option<String>,
     is_audio: bool,
     size: u64,
-    mapping: Option<usize>
+    mapping: Option<usize>, // this holds which target file this maps to
 }
 
 #[derive(Debug)]
@@ -26,7 +29,8 @@ pub struct TargetFile {
     path: PathBuf,
     extension: Option<String>,
     is_audio: bool,
-    size: u64
+    size: u64,
+    mapping: Option<usize>, // this holds which source file this maps to
 }
 
 // ignore all results that are not a file
@@ -37,7 +41,7 @@ fn is_file(entry: &Result<DirEntry, self::walkdir::Error>) -> bool {
     }
 }
 
-pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError> 
+pub fn run<B>(buffer: B, input: &str, _output: &str) -> Result<(),MigrationError> 
     where B: AsRef<[u8]> {
     // build the set of audio formats
     let audio_formats:HashSet<String> = AUDIO_FORMATS.into_iter().map(|x| x.to_string()).collect();
@@ -83,25 +87,15 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
             } else {
                 false
             };
-            targets.push(TargetFile { index:i, path:path.to_path_buf(), extension, is_audio, size:file.length() });
+            targets.push(TargetFile { index:i, path:path.to_path_buf(), extension, is_audio, size:file.length(), mapping:None });
         }
     }
 
-    // DEFINE MAPPINGS
-    filemapping::create_mapping(&mut inputs, &targets);
-    
-    run_matches(torrent_meta, inputs, targets);
+    // define the mappings
+    filemapping::create_mapping(&mut inputs, &mut targets);
+
+    // run the matcher
+    matching::run_matcher(torrent_meta, inputs, targets);
 
     Ok(())
-}
-
-// this will take our matches and run them
-fn run_matches(torrent_meta:Metainfo, inputs:Vec<SourceFile>, targets:Vec<TargetFile>) {
-    // check the filesizes
-
-    // repad the files if filesizes differ
-
-    // do a hash check on the data
-
-    // if we don't have a match yet, try the sliding window approach
 }
