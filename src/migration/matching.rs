@@ -6,20 +6,26 @@ use std::fs::File;
 use std::collections::HashMap;
 use migration::bip_metainfo::{Metainfo};
 use migration::sha1::{Sha1, Digest};
-//use migration::rayon::prelude::*;
+use migration::rayon::prelude::*;
+
+#[derive(Debug)]
+struct PieceResult {
+    files: Vec<usize>,
+    success: bool,
+}
 
 // run a hash check on the given configuration
 fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<TargetFile>) -> HashMap<usize,Vec<bool>> {
     let info = torrent_meta.info();
     let piece_length = info.piece_length();
     let pieces = info.pieces();
-    // TODO: to support rayon's par_iter, we'll probably want to turn the Pieces generator in a vec or implement the traits on Pieces
-    let results:HashMap<usize,Vec<bool>> = pieces.enumerate().map(|item| {
+    // put the pieces into a vec so we can use Rayon on them
+    let pieces_vec:Vec<&[u8]> = pieces.collect();
+
+    // calculate the results
+    let results:Vec<PieceResult> = pieces_vec.par_iter().enumerate().map(|item| {
         // calculate the offset of this piece
         let piece_offset = item.0 as u64 * piece_length;
-
-        // result that will be returned
-        let mut result_map:HashMap<usize,bool> = HashMap::new();
 
         // define the starting point file
         let mut file_offset = 0;
@@ -33,6 +39,8 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
             }
         }
 
+        // result building
+        let mut piece_result = PieceResult { files:vec!(starting.index), success:false };
         // check if we have a mapping for this file
         let mut result = false;
         if let Some(mapping) = starting.mapping {
@@ -44,23 +52,25 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
             file.take(piece_length).read_to_end(&mut buffer).expect("Unable to seek in file");
             // sha1 on this buffer, check if it matches the piece
             let output:Vec<u8> = Sha1::digest(&buffer).to_vec();
-            result = output == item.1;
+            result = output == *item.1;
         }
-        result_map.insert(starting.index, result);
-        result_map
+        piece_result.success = result;
 
-    // fold this into a single hashmap
-    }).fold(HashMap::new(),|mut acc, x| {
-        for (index, result) in x {
-            if !acc.contains_key(&index) {
-                acc.insert(index,Vec::new());
+        piece_result
+    }).collect();
+
+    // merge these results into a hashmap
+    let merged_results:HashMap<usize, Vec<bool>> = results.iter().fold(HashMap::new(), |mut acc, x| {
+        for index in &x.files {
+            if !acc.contains_key(index) {
+                acc.insert(*index, Vec::new());
             }
-            acc.get_mut(&index).unwrap().push(result);
+            acc.get_mut(&index).unwrap().push(x.success);
         }
         acc
     });
 
-    results
+    merged_results
 }
 
 fn print_hash_result(result:&HashMap<usize,Vec<bool>>, targets:&Vec<TargetFile>) {
