@@ -29,32 +29,46 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
 
         // define the starting point file
         let mut file_offset = 0;
-        let mut starting = &targets[0];
+        let mut curfile = &targets[0];
         for target in targets {
-            starting = target;
+            curfile = target;
             file_offset += target.size;
             if file_offset > piece_offset {
                 file_offset -= target.size;
                 break;
             }
         }
+        file_offset = piece_offset - file_offset;
 
         // result building
-        let mut piece_result = PieceResult { files:vec!(starting.index), success:false };
-        // check if we have a mapping for this file
-        let mut result = false;
-        if let Some(mapping) = starting.mapping {
-            // create buffer
-            let mut buffer:Vec<u8> = Vec::with_capacity(piece_length as usize);
-            // load piece of the file into buffer
-            let mut file = File::open(&inputs[mapping].path).unwrap();
-            file.seek(SeekFrom::Start(piece_offset-file_offset)).expect("Unable to seek in file");
-            file.take(piece_length).read_to_end(&mut buffer).expect("Unable to seek in file");
-            // sha1 on this buffer, check if it matches the piece
-            let output:Vec<u8> = Sha1::digest(&buffer).to_vec();
-            result = output == *item.1;
+        let mut piece_result = PieceResult { files:Vec::new(), success:false };
+        // create buffer
+        let mut buffer:Vec<u8> = Vec::with_capacity(piece_length as usize);
+        
+        // fill up the buffer
+        while buffer.len() < piece_length as usize {
+            piece_result.files.push(curfile.index);
+            if let Some(mapping) = curfile.mapping {
+                // load piece of the file into buffer
+                let mut file = File::open(&inputs[mapping].path).unwrap();
+                file.seek(SeekFrom::Start(file_offset)).expect("Unable to seek in file");
+                file.take(piece_length-buffer.len() as u64).read_to_end(&mut buffer).expect("Unable to seek in file");
+            } else {
+                // no mapping available, which means we can give up on this piece
+                piece_result.success = false;
+                return piece_result;
+            }
+            // take next file if available
+            if let Some(newf) = targets.get(curfile.index + 1) {
+                file_offset = 0;
+                curfile = newf;
+            } else {
+                break;
+            }
         }
-        piece_result.success = result;
+        // sha1 on the created buffer, check if it matches the piece
+        let output:Vec<u8> = Sha1::digest(&buffer).to_vec();
+        piece_result.success = output == *item.1;
 
         piece_result
     }).collect();
@@ -98,8 +112,12 @@ fn print_hash_result(result:&HashMap<usize,Vec<bool>>, targets:&Vec<TargetFile>)
 }
 
 pub fn run_matcher(torrent_meta:Metainfo, inputs:Vec<SourceFile>, targets:Vec<TargetFile>) {
-    // check if filesizes don't match and repad the files if filesizes differ
+    // do a first hash check
     let result = hash_check(&torrent_meta, &inputs, &targets);
+
+    // mark finalized based on ratio and if there is a mapping or not
+
+
     print_hash_result(&result,&targets);
     // do a hash check on the data
 

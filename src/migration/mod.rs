@@ -31,6 +31,7 @@ pub struct TargetFile {
     is_audio: bool,
     size: u64,
     mapping: Option<usize>, // this holds which source file this maps to
+    finalized: bool,
 }
 
 // ignore all results that are not a file
@@ -87,7 +88,7 @@ pub fn run<B>(buffer: B, input: &str, _output: &str) -> Result<(),MigrationError
             } else {
                 false
             };
-            targets.push(TargetFile { index:i, path:path.to_path_buf(), extension, is_audio, size:file.length(), mapping:None });
+            targets.push(TargetFile { index:i, path:path.to_path_buf(), extension, is_audio, size:file.length(), mapping:None, finalized:false });
         }
     }
 
