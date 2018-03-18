@@ -17,4 +17,4 @@ It is a reimplementation of my original tool [whatmigrate](https://github.com/Th
 
 ## Todo
 - If FLAC files fail to match a torrent, try reencoding the torrent with some different encoding settings
-- Add support for torrent clients
+- Add integration with Torrent clients and Redacted

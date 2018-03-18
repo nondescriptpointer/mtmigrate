@@ -14,8 +14,14 @@ struct PieceResult {
     success: bool,
 }
 
+#[derive(Debug)]
+struct FileResult {
+    good:i32,
+    total:i32,
+}
+
 // run a hash check on the given configuration
-fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<TargetFile>) -> HashMap<usize,Vec<bool>> {
+fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<TargetFile>) -> Vec<FileResult> {
     let info = torrent_meta.info();
     let piece_length = info.piece_length();
     let pieces = info.pieces();
@@ -55,6 +61,7 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
                 file.take(piece_length-buffer.len() as u64).read_to_end(&mut buffer).expect("Unable to seek in file");
             } else {
                 // no mapping available, which means we can give up on this piece
+                // (Minor TODO: this can cause pieces not to show up as matches for boundary pieces)
                 piece_result.success = false;
                 return piece_result;
             }
@@ -84,46 +91,62 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
         acc
     });
 
-    merged_results
-}
-
-fn print_hash_result(result:&HashMap<usize,Vec<bool>>, targets:&Vec<TargetFile>) {
-    println!("Hash test result:");
-    let max = targets.iter().map(|e| e.path.to_string_lossy().len()).max().unwrap();
-    for target in targets {
-        // get amount of good pieces for this file
+    let result:Vec<FileResult> = targets.iter().map(|target| {
         let mut good = 0;
         let mut total = 1;
-        if let Some(item) = result.get(&target.index) {
-            good = item.iter().fold(0,|mut acc,x| {
+        if let Some(info) = merged_results.get(&target.index) {
+            good = info.iter().fold(0,|mut acc,x| {
                 if *x { acc += 1; }
                 acc
             });
-            total = item.len();
-        }
+            total = info.len() as i32
+        } 
+        FileResult { good, total }
+    }).collect();
 
+    result
+}
+
+fn print_hash_result(result:&Vec<FileResult>, targets:&Vec<TargetFile>) {
+    println!("Hash test result:");
+    let max = targets.iter().map(|e| e.path.to_string_lossy().len()).max().unwrap();
+    for (index, target) in targets.iter().enumerate() {
+        let info = &result[index];
         println!("  {:3$} = {:.1}%{}", 
             target.path.to_string_lossy(),
-            (good as f32/total as f32)*100.0,
+            (info.good as f32/info.total as f32)*100.0,
             if target.mapping == None { " (unmapped)" } else { "" },
             max+1,
         );
     }
 }
 
-pub fn run_matcher(torrent_meta:Metainfo, inputs:Vec<SourceFile>, targets:Vec<TargetFile>) {
+pub fn run_matcher(torrent_meta:Metainfo, inputs:Vec<SourceFile>, mut targets:Vec<TargetFile>) {
     // do a first hash check
     let result = hash_check(&torrent_meta, &inputs, &targets);
+    print_hash_result(&result,&targets);
 
-    // mark finalized based on ratio and if there is a mapping or not
+    // take actions on the failed files
+    for (index, target) in targets.iter_mut().enumerate() {
+        let info = &result[index];
+        if (info.good as f32/info.total as f32) < 0.2 && target.is_audio {
+            // only if we have a mapping
+            if let Some(mapping) = target.mapping {
+                // set the offset
+                target.offset = inputs[mapping].size - target.size;
+                // recheck the file
+                
+                // if still not ok, try sliding window approach to find a piece match and find the offset
+                
+            }
+        }
+    }
 
-
+    let result = hash_check(&torrent_meta, &inputs, &targets);
     print_hash_result(&result,&targets);
     // do a hash check on the data
 
-
-    // if we don't have a match yet, finding the offset might be difficult as both front and back padding could be different
-
     // try the sliding window approach
 
+    // execute the migration
 }
