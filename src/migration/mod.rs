@@ -31,7 +31,7 @@ pub struct TargetFile {
     is_audio: bool,
     size: u64,
     mapping: Option<usize>, // this holds which source file this maps to
-    offset: u64,
+    offset: i64,
 }
 
 // ignore all results that are not a file

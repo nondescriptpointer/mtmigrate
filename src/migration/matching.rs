@@ -16,8 +16,8 @@ struct PieceResult {
 
 #[derive(Debug)]
 struct FileResult {
-    good:i32,
-    total:i32,
+    good:u32,
+    total:u32,
 }
 
 // run a hash check on the given configuration
@@ -28,7 +28,7 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
     // put the pieces into a vec so we can use Rayon on them
     let pieces_vec:Vec<&[u8]> = pieces.collect();
 
-    // calculate the results
+    // iterate the pieces and calculate the results in parallel
     let results:Vec<PieceResult> = pieces_vec.par_iter().enumerate().map(|item| {
         // calculate the offset of this piece
         let piece_offset = item.0 as u64 * piece_length;
@@ -46,9 +46,10 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
         }
         file_offset = piece_offset - file_offset;
 
-        // result building
+        // keep track of result and files that are part of this piece
         let mut piece_result = PieceResult { files:Vec::new(), success:false };
-        // create buffer
+
+        // create buffer for this piece
         let mut buffer:Vec<u8> = Vec::with_capacity(piece_length as usize);
         
         // fill up the buffer
@@ -57,11 +58,23 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
             if let Some(mapping) = curfile.mapping {
                 // load piece of the file into buffer
                 let mut file = File::open(&inputs[mapping].path).unwrap();
-                file.seek(SeekFrom::Start(file_offset)).expect("Unable to seek in file");
-                file.take(piece_length-buffer.len() as u64).read_to_end(&mut buffer).expect("Unable to seek in file");
+                // check if we are not trying negative seek, in that case, mark the piece as failed immediately
+                if (file_offset as i64 + curfile.offset) < 0 {
+                    piece_result.success = false;
+                    return piece_result;
+                }
+                let total_offset  = (file_offset as i64 + curfile.offset) as u64;
+                file.seek(SeekFrom::Start(total_offset as u64)).expect("Unable to seek in file");
+                // put a cap on the number of bytes taken to not get any bytes of the end of the file
+                let mut numbytes = piece_length-buffer.len() as u64;
+                if total_offset + numbytes > (curfile.size as i64 + curfile.offset) as u64 {
+                    numbytes = (curfile.size as i64 - total_offset as i64 + curfile.offset) as u64;
+                }
+                file.take(numbytes).read_to_end(&mut buffer).expect("Unable to seek in file");
+                // (Minor TODO: if the input is smaller than the target and we haven't filled the buffer, we might want to add padding to make sure we don't incorrectly mark a subsequent file as part of this piece)
             } else {
                 // no mapping available, which means we can give up on this piece
-                // (Minor TODO: this can cause pieces not to show up as matches for boundary pieces)
+                // (Minor TODO: this can cause pieces not to show up as non matches for boundary pieces)
                 piece_result.success = false;
                 return piece_result;
             }
@@ -91,6 +104,7 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
         acc
     });
 
+    // and get the results for each target file into a vec
     let result:Vec<FileResult> = targets.iter().map(|target| {
         let mut good = 0;
         let mut total = 1;
@@ -99,7 +113,7 @@ fn hash_check(torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, targets:&Vec<Targ
                 if *x { acc += 1; }
                 acc
             });
-            total = info.len() as i32
+            total = info.len() as u32
         } 
         FileResult { good, total }
     }).collect();
@@ -133,8 +147,8 @@ pub fn run_matcher(torrent_meta:Metainfo, inputs:Vec<SourceFile>, mut targets:Ve
             // only if we have a mapping
             if let Some(mapping) = target.mapping {
                 // set the offset
-                target.offset = inputs[mapping].size - target.size;
-                // recheck the file
+                target.offset = inputs[mapping].size as i64 - target.size as i64;
+                // recheck this file to determine the next step
                 
                 // if still not ok, try sliding window approach to find a piece match and find the offset
                 
@@ -142,11 +156,9 @@ pub fn run_matcher(torrent_meta:Metainfo, inputs:Vec<SourceFile>, mut targets:Ve
         }
     }
 
+    // do a hash check on the data
     let result = hash_check(&torrent_meta, &inputs, &targets);
     print_hash_result(&result,&targets);
-    // do a hash check on the data
-
-    // try the sliding window approach
 
     // execute the migration
 }
