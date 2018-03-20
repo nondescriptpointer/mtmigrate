@@ -6,8 +6,10 @@ use self::bip_metainfo::{Metainfo};
 use self::walkdir::{DirEntry, WalkDir};
 use std::path::{PathBuf};
 use std::collections::{HashSet};
+use std::io;
 mod filemapping;
 mod matching;
+mod migrator;
 
 static AUDIO_FORMATS:&'static[&'static str] = &["flac","mp3","ogg","aac","ac3","dts"];
 
@@ -42,7 +44,7 @@ fn is_file(entry: &Result<DirEntry, self::walkdir::Error>) -> bool {
     }
 }
 
-pub fn run<B>(buffer: B, input: &str, _output: &str) -> Result<(),MigrationError> 
+pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError> 
     where B: AsRef<[u8]> {
     // build the set of audio formats
     let audio_formats:HashSet<String> = AUDIO_FORMATS.into_iter().map(|x| x.to_string()).collect();
@@ -96,7 +98,21 @@ pub fn run<B>(buffer: B, input: &str, _output: &str) -> Result<(),MigrationError
     filemapping::create_mapping(&mut inputs, &mut targets);
 
     // run the matcher
-    matching::run_matcher(torrent_meta, inputs, targets);
+    matching::run_matcher(&torrent_meta, &mut inputs, &mut targets);
+
+    // run the migrator
+    // ask to execute the migration
+    println!("Run this migration? (y/n) [y]");
+    let mut reply = String::new();
+    io::stdin().read_line(&mut reply).unwrap();
+    match reply.trim() {
+        "y" | "yes" => {
+            migrator::migrate(&torrent_meta, &mut inputs, &mut targets, output);
+        },
+        _ => {
+            // do nothing
+        }
+    }
 
     Ok(())
 }
