@@ -56,14 +56,28 @@ pub fn create_mapping(mut inputs: &mut Vec<SourceFile>, targets: &mut Vec<Target
 fn print_mapping(inputs: &Vec<SourceFile>, targets: &Vec<TargetFile>) {
     // determine the maximume length for padding
     let max = inputs.iter().map(|e| e.display.len()).max().unwrap();
+    let max_output = inputs.iter().map(|e| {
+        if let Some(ref i) = e.mapping {
+            targets[*i].path.to_string_lossy().len()
+        } else {
+            0
+        }
+    }).max().unwrap();
     // print all the mappings we found
+    let mut total_diff = 0.0;
+    let mut total_size = 0.0;
     for input in inputs.iter() {
         if let Some(ref i) = input.mapping {
-            println!("  {:2$} => {}", input.display, targets[*i].path.to_string_lossy(), max+1);
+            total_diff += (input.size as f64-targets[*i].size as f64).abs();
+            total_size += input.size as f64;
+            let size_diff = (input.size as f64-targets[*i].size as f64).abs() / 1024.0;
+            let size_perc = (size_diff as f64 / input.size as f64).abs() * 100.0;
+            println!("  {:4$} => {:5$}(size diff: {:.1} kB / {:.2}%)", input.display, targets[*i].path.to_string_lossy(), size_diff, size_perc, max+1, max_output+1);
         } else {
             println!("  {:1$} => None", input.display, max+1);
         }
     }
+    println!("Total size difference: {:.1} kB / {:.2}%", total_diff as f64 / 1024.0, (total_diff / total_size) * 100.0);
 }
 
 // map by the filename

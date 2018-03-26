@@ -178,7 +178,7 @@ fn piece_search(index:usize,torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, tar
     file.read_to_end(&mut buffer).expect("Unable to read file");
 
     // determine our window size
-    let windowsize = (targets[index].size as i64 - inputfile.size as i64).abs() + piece_length as i64 / 2;
+    let windowsize = (targets[index].size as i64 - inputfile.size as i64).abs() + piece_length as i64;
     
     // do the search
     // (TODO: this iterator should start in the middle instead to potentially speed up the search considerably)
@@ -200,8 +200,12 @@ fn piece_search(index:usize,torrent_meta:&Metainfo, inputs:&Vec<SourceFile>, tar
 
 fn print_hash_result(result:&Vec<FileResult>, targets:&Vec<TargetFile>) {
     let max = targets.iter().map(|e| e.path.to_string_lossy().len()).max().unwrap();
+    let mut total_good = 0;
+    let mut total_total = 0;
     for (index, target) in targets.iter().enumerate() {
         let info = &result[index];
+        total_good += info.good;
+        total_total += info.total;
         println!("  {:3$} = {:.1}%{}", 
             target.path.to_string_lossy(),
             (info.good as f32/info.total as f32)*100.0,
@@ -209,6 +213,7 @@ fn print_hash_result(result:&Vec<FileResult>, targets:&Vec<TargetFile>) {
             max+1,
         );
     }
+    println!("Overall hash result: {:.2}%", (total_good as f32 / total_total as f32) * 100.0);
 }
 
 pub fn run_matcher(torrent_meta:&Metainfo, inputs:&mut Vec<SourceFile>, targets:&mut Vec<TargetFile>) {

@@ -33,6 +33,7 @@ pub fn migrate(torrent_meta:&Metainfo, inputs: &mut Vec<SourceFile>, targets: &m
                 // if we have a negative offset, add initial padding to the size of the offset
                 if target.offset < 0 {
                     file.set_len((-target.offset) as u64).unwrap();
+                    file.seek(SeekFrom::Start((-target.offset) as u64)).unwrap();
                 }
                 // write the input to the output
                 let mut buf = Vec::new();
