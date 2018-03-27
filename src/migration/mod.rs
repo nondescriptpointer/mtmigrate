@@ -7,6 +7,7 @@ use self::walkdir::{DirEntry, WalkDir};
 use std::path::{PathBuf,Path};
 use std::collections::{HashSet};
 use std::io;
+use std::fs;
 mod filemapping;
 mod matching;
 mod migrator;
@@ -110,8 +111,20 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
     let mut reply = String::new();
     io::stdin().read_line(&mut reply).unwrap();
     match reply.trim() {
-        "y" | "yes" => {
+        "y" | "yes" | "" => {
             migrator::migrate(&torrent_meta, &mut inputs, &mut targets, output);
+            // offer delete
+            println!("Permanently delete input folder '{}'? (y/n) [n]", input);
+            let mut re = String::new();
+            io::stdin().read_line(&mut re).unwrap();
+            match re.trim() {
+                "y" | "yes" => {
+                    fs::remove_dir_all(input).expect("Failed to delete folder");
+                },
+                _ => {
+                    // do nothing
+                }
+            }
         },
         _ => {
             // do nothing
