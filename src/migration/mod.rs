@@ -4,7 +4,7 @@ extern crate sha1;
 extern crate rayon;
 use self::bip_metainfo::{Metainfo};
 use self::walkdir::{DirEntry, WalkDir};
-use std::path::{PathBuf};
+use std::path::{PathBuf,Path};
 use std::collections::{HashSet};
 use std::io;
 mod filemapping;
@@ -95,6 +95,10 @@ pub fn run<B>(buffer: B, input: &str, output: &str) -> Result<(),MigrationError>
     }
 
     // define the mappings
+    if let Some(p) = torrent_meta.info().directory() {
+        let input_path = Path::new(input).file_name().unwrap();
+        println!("Directory mapping:\n  {} => {}", input_path.to_string_lossy(), p.to_string_lossy());
+    }
     filemapping::create_mapping(&mut inputs, &mut targets);
 
     // run the matcher

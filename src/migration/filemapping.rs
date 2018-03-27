@@ -20,7 +20,7 @@ pub fn create_mapping(mut inputs: &mut Vec<SourceFile>, targets: &mut Vec<Target
     // start with a map by filename
     map_by_filename(&mut inputs, &targets);
     loop {
-        println!("Mapping:");
+        println!("File mapping:");
         print_mapping(&inputs,&targets);
         println!("Enter 'c' to continue, 's' to try filesize remap, 'f' to try filename remap or 'm' to manually adjust [c]");
         let mut reply = String::new();
