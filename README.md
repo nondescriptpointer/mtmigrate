@@ -14,6 +14,7 @@ It is a reimplementation of my original tool [whatmigrate](https://github.com/Th
 - Clone the repository
 - Run cargo build --release
 - Run the binary in the target/release directory, running it will list all the available arguments
+- On first run, a JSON config file will be created in a platform specific configuration directory. (Linux: ~/.config/mtmigrate, macOS: $HOME/Library/Application Support/mtmigrate, Windows: %APPDATA%\mtmigrate\mtmigrate)
 
 ## Todo
 - Optimize the piece search further, it's still fairly slow on low-end systems

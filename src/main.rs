@@ -1,9 +1,13 @@
 extern crate clap;
+extern crate preferences;
 use clap::{Arg, App};
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
+use preferences::{AppInfo, PreferencesMap, Preferences};
 mod migration;
+
+const APP_INFO: AppInfo = AppInfo{name: "mtmigrate", author: "mtmigrate"};
 
 fn main() {
     let matches = App::new("mtmigrate")
@@ -28,14 +32,35 @@ fn main() {
                         .long("output")
                         .value_name("output")
                         .help("Output directory")
-                        .required(true)
+                        .required(false)
                         .index(3)
                         .takes_value(true))
                     .get_matches();
 
+    // determine configuration
     let torrent_file = matches.value_of("torrent").unwrap();
     let input = matches.value_of("input").unwrap();
-    let output = matches.value_of("output").unwrap();
+
+    // load the settings
+    let prefs_key = "appsettings";
+    let load_result = PreferencesMap::<String>::load(&APP_INFO, prefs_key);
+    let preferences = match load_result {
+        Ok(result) => result,
+        Err(_) => {
+            let mut prefs: PreferencesMap<String> = PreferencesMap::new();
+            prefs.insert("output".into(),"/tmp".into());
+            prefs.save(&APP_INFO, prefs_key).expect("Failed to write configuration file");
+            prefs
+        }
+    };
+
+    // if we don't have an output path in teh parameters, try to load it from configuration
+    let output = match matches.value_of("output") {
+        Some(out) => out,
+        None => {
+            &preferences["output"]
+        }
+    };
 
     // read the torrent file into a byte vector
     let mut f = File::open(torrent_file).expect("Failed to open torrent file");
